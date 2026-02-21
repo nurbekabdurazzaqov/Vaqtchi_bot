@@ -5,7 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CallbackQueryHandler, CommandHandler
 import asyncio
 
-TOKEN = os.getenv "AAGMhVPyns29hOX3BRtpEj3bQQeUOo1GUwg"
+TOKEN = os.getenv ("TOKEN")
 
 conn = sqlite3.connect("members.db", check_same_thread=False)
 cursor = conn.cursor()
