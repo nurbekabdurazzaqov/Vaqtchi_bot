@@ -1,154 +1,219 @@
 import os
 import sqlite3
 from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, CallbackQueryHandler, CommandHandler
-import asyncio
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    filters,
+    ContextTypes
+)
 
-TOKEN = os.getenv ("TOKEN")
+TOKEN = os.getenv("TOKEN")
+OWNER_ID = 5351101319  # <-- Sizning Telegram ID
 
-conn = sqlite3.connect("members.db", check_same_thread=False)
+# ================= NARXLAR =================
+MONTHLY_PRICE = 49000
+YEARLY_PRICE = 349000
+
+# ================= DATABASE =================
+conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
+
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS members (
+CREATE TABLE IF NOT EXISTS payments (
     admin_id INTEGER,
-    chat_id INTEGER,
-    user_id INTEGER,
+    plan TEXT,
+    days INTEGER,
+    price INTEGER,
     expire_date TEXT,
-    type TEXT,
-    status TEXT,
-    PRIMARY KEY(admin_id, chat_id, user_id)
+    status TEXT
 )
 """)
 conn.commit()
 
-# Asosiy bo‘lim tugmalari
-def get_main_menu():
-    keyboard = [
-        [InlineKeyboardButton("📌 Free 1-5 kun", callback_data="free_section")],
-        [InlineKeyboardButton("📌 Premium 5-30 kun", callback_data="premium_section")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-# Kunlar tugmalari
-def get_days_keyboard(section):
-    if section == "free":
-        keyboard = [
-            [InlineKeyboardButton(f"{i} kun", callback_data=f"free_{i}") for i in range(1,6)]
-        ]
-    else:  # premium
-        keyboard = [
-            [InlineKeyboardButton(f"{i} kun", callback_data=f"premium_{i}") for i in [5,10,15,20,25,30]]
-        ]
-    return InlineKeyboardMarkup(keyboard)
-
-# /start komandasi
+# ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("💎 Oylik Premium", callback_data="monthly")],
+        [InlineKeyboardButton("👑 Yillik Premium", callback_data="yearly")]
+    ]
+
     await update.message.reply_text(
-        "Salom! Quyidagi 2 bo‘limdan birini tanlang:\n\n"
-        "1️⃣ Free 1-5 kun – sinov uchun, bepul ishlaydi, foydalanuvchilar 1–5 kun kuzatiladi va avtomatik chiqariladi.\n"
-        "2️⃣ Premium 5-30 kun – to‘lov asosida ishlaydi, foydalanuvchilar tanlangan muddat davomida kuzatiladi, to‘lovdan so‘ng admin tasdiqlaydi.",
-        reply_markup=get_main_menu()
+        f"💎 PREMIUM TARIFLAR\n\n"
+        f"📅 Oylik: {MONTHLY_PRICE:,} so‘m\n"
+        f"👑 Yillik: {YEARLY_PRICE:,} so‘m\n\n"
+        f"Tarifni tanlang:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# Callback tugmalar ishlashi
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ================= PLAN TANLASH =================
+async def plan_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    admin_id = query.from_user.id
-    chat_id = query.message.chat.id
-    user_id = query.from_user.id
-    data = query.data
 
-    # Bo‘lim tanlash
-    if data in ["free_section", "premium_section"]:
-        section = "free" if data=="free_section" else "premium"
-        if section == "free":
-            text = ("🆓 Free bo‘limini tanladingiz.\n\n"
-                    "✅ 1–5 kun bepul sinov\n"
-                    "✅ Foydalanuvchilar muddat tugagach avtomatik chiqariladi\n"
-                    "⏳ Kunlar tanlash uchun quyidagi tugmalardan birini bosing:")
-        else:
-            text = ("💎 Premium bo‘limini tanladingiz.\n\n"
-                    "✅ 5–30 kun tanlash mumkin\n"
-                    "✅ To‘lov qilish kerak (Uzcard / Humo)\n"
-                    "💳 Uzcard: 8600xxxxxx\n"
-                    "💳 Humo: 9860xxxxxx\n"
-                    "⏳ Kunlar tanlash uchun quyidagi tugmalardan birini bosing:")
+    if query.data == "monthly":
+        plan = "Oylik"
+        days = 30
+        price = MONTHLY_PRICE
 
-        await query.edit_message_text(
-            text,
-            reply_markup=get_days_keyboard(section)
-        )
-        return
+    else:
+        plan = "Yillik"
+        days = 365
+        price = YEARLY_PRICE
 
-    # Kun tanlash
-    if data.startswith("free"):
-        days = int(data.split("_")[1])
-        expire_date = datetime.now() + timedelta(days=days)
-        type_user = "free"
-        await query.edit_message_text(f"🆓 Free {days} kun muvaffaqiyatli boshlanadi!\nFoydalanuvchilar {days} kun kuzatiladi va avtomatik chiqariladi.")
-    elif data.startswith("premium"):
-        days = int(data.split("_")[1])
-        expire_date = datetime.now() + timedelta(days=days)
-        type_user = "premium"
-        await query.edit_message_text(
-            f"💎 Premium {days} kun tanlandi.\n"
-            f"To‘lov qilgandan so‘ng /approve buyruq bilan tasdiqlang.\n"
-            f"💳 Uzcard: 8600xxxxxx\n"
-            f"💳 Humo: 9860xxxxxx"
-        )
-
-    # Database saqlash
     cursor.execute(
-        "INSERT OR REPLACE INTO members VALUES (?, ?, ?, ?, ?, ?)",
-        (admin_id, chat_id, user_id, expire_date.isoformat(), type_user, "active")
+        "INSERT INTO payments VALUES (?, ?, ?, ?, ?, ?)",
+        (query.from_user.id, plan, days, price, None, "pending")
     )
     conn.commit()
 
-# Foydalanuvchilarni tekshirish (avtomatik chiqarish)
-async def check_members(app):
-    while True:
-        cursor.execute("SELECT admin_id, chat_id, user_id, expire_date FROM members WHERE status='active'")
-        rows = cursor.fetchall()
-        for admin_id, chat_id, user_id, expire_date in rows:
-            if datetime.now() > datetime.fromisoformat(expire_date):
-                try:
-                    await app.bot.ban_chat_member(chat_id, user_id)
-                    await app.bot.unban_chat_member(chat_id, user_id)
-                    cursor.execute(
-                        "UPDATE members SET status='removed' WHERE admin_id=? AND chat_id=? AND user_id=?",
-                        (admin_id, chat_id, user_id)
-                    )
-                    conn.commit()
-                except:
-                    pass
-        await asyncio.sleep(3600)
+    await query.edit_message_text(
+        f"💳 TO‘LOV MA’LUMOTI\n\n"
+        f"Tarif: {plan}\n"
+        f"Muddat: {days} kun\n"
+        f"Summa: {price:,} so‘m\n\n"
+        f"💳 Kartalar:\n"
+        f"Visa: 4916 9909 6190 2001\n"
+        f"Humo: 9860 1001 2583 7540\n"
+        f"Karta egasi: Nurbek Abdurazzoqov\n\n"
+        f"To‘lovdan so‘ng screenshot yuboring."
+    )
 
-# Admin tasdiqlash komandasi
+# ================= SCREENSHOT QABUL =================
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+
+    cursor.execute(
+        "SELECT plan, days, price FROM payments WHERE admin_id=? AND status='pending'",
+        (user_id,)
+    )
+    payment = cursor.fetchone()
+
+    if payment:
+        plan, days, price = payment
+
+        keyboard = [[
+            InlineKeyboardButton(
+                "✅ Tasdiqlash",
+                callback_data=f"approve_{user_id}_{days}_{price}"
+            )
+        ]]
+
+        await context.bot.send_photo(
+            chat_id=OWNER_ID,
+            photo=update.message.photo[-1].file_id,
+            caption=f"💰 To‘lov keldi\nAdmin: {user_id}\nTarif: {plan}\nSumma: {price:,}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+        await update.message.reply_text("⌛ To‘lov tekshirilmoqda...")
+
+# ================= TASDIQLASH =================
 async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) != 3:
-        await update.message.reply_text("/approve admin_id chat_id kunlar")
-        return
-    admin_id = int(context.args[0])
-    chat_id = int(context.args[1])
-    days = int(context.args[2])
-    expire_date = datetime.now() + timedelta(days=days)
+    query = update.callback_query
+    await query.answer()
 
-    cursor.execute(
-        "UPDATE members SET expire_date=?, type='premium', status='active' WHERE admin_id=? AND chat_id=?",
-        (expire_date.isoformat(), admin_id, chat_id)
-    )
+    data = query.data.split("_")
+    admin_id = int(data[1])
+    days = int(data[2])
+    price = int(data[3])
+
+    expire = datetime.now() + timedelta(days=days)
+
+    cursor.execute("""
+        UPDATE payments
+        SET status='approved',
+            expire_date=?
+        WHERE admin_id=? AND status='pending'
+    """, (expire.strftime("%Y-%m-%d %H:%M:%S"), admin_id))
     conn.commit()
-    await update.message.reply_text(f"✅ Admin {admin_id} uchun {days} kun premium tasdiqlandi!")
 
-# Asosiy ishga tushirish
-async def main():
+    await context.bot.send_message(
+        chat_id=admin_id,
+        text=f"✅ Premium {days} kun aktiv qilindi!\n\n📅 Tugash sanasi: {expire.date()}"
+    )
+
+    await query.edit_message_caption("✅ Tasdiqlandi")
+
+# ================= STATISTIKA =================
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        return
+
+    cursor.execute("SELECT SUM(price) FROM payments WHERE status='approved'")
+    total_income = cursor.fetchone()[0] or 0
+
+    cursor.execute("SELECT COUNT(*) FROM payments WHERE status='approved'")
+    active_users = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT SUM(price) FROM payments
+        WHERE status='approved'
+        AND strftime('%m', expire_date)=strftime('%m','now')
+    """)
+    monthly_income = cursor.fetchone()[0] or 0
+
+    await update.message.reply_text(
+        f"📊 STATISTIKA\n\n"
+        f"💰 Umumiy daromad: {total_income:,} so‘m\n"
+        f"📅 Shu oy daromad: {monthly_income:,} so‘m\n"
+        f"👥 Faol premiumlar: {active_users} ta"
+    )
+
+# ================= EXPIRE CHECK =================
+async def check_expire(context: ContextTypes.DEFAULT_TYPE):
+    now = datetime.now()
+
+    cursor.execute("""
+        SELECT admin_id, expire_date FROM payments
+        WHERE status='approved'
+    """)
+    rows = cursor.fetchall()
+
+    for admin_id, expire_date in rows:
+        expire_time = datetime.strptime(expire_date, "%Y-%m-%d %H:%M:%S")
+
+        # 3 kun oldin eslatma
+        if expire_time - now <= timedelta(days=3) and expire_time > now:
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text="⚠️ Premium muddati 3 kundan so‘ng tugaydi."
+            )
+
+        # Tugagan bo‘lsa
+        if now >= expire_time:
+            cursor.execute("""
+                UPDATE payments
+                SET status='expired'
+                WHERE admin_id=?
+            """, (admin_id,))
+            conn.commit()
+
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text="❌ Premium muddati tugadi."
+            )
+
+# ================= MAIN =================
+def main():
     app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button))
-    app.add_handler(CommandHandler("approve", approve))
-    asyncio.create_task(check_members(app))
-    await app.run_polling()
 
-asyncio.run(main())
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CallbackQueryHandler(plan_handler, pattern="^(monthly|yearly)$"))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
+
+    app.job_queue.run_repeating(check_expire, interval=86400, first=10)
+
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
