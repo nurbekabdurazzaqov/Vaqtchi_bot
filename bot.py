@@ -1,17 +1,21 @@
 import sqlite3
 import os
 import logging
+import asyncio
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # Loglarni sozlash
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # TOKENLAR
-TOKEN = os.environ.get("TELEGRAM_TOKEN", "7707636600:AAGMhVPyns29hOX3BRtpEj3bQQeUOo1GUwg")
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID", "5351101319"))
+
+logger.info(f"📌 Token: {TOKEN[:10] if TOKEN else 'TOPILMADI'}...")
+logger.info(f"📌 Owner ID: {OWNER_ID}")
 
 # KARTALAR
 VISA_CARD = "4916 9909 6190 2001"
@@ -41,7 +45,7 @@ logger.info("✅ Database tayyor")
 # START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    logger.info(f"👤 /start komandasi: {user.id} ({user.first_name})")
+    logger.info(f"👤 /start: {user.id}")
     
     keyboard = [
         [InlineKeyboardButton("💎 Oylik Premium", callback_data="monthly")],
@@ -61,7 +65,7 @@ async def plan_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
     await query.answer()
     
-    logger.info(f"👤 Tarif tanlandi: {user.id} - {query.data}")
+    logger.info(f"👤 Tarif: {user.id} - {query.data}")
     
     if query.data == "monthly":
         plan, days, price = "Oylik", 30, MONTHLY_PRICE
@@ -77,17 +81,17 @@ async def plan_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💳 TO'LOV MA'LUMOTLARI\n\n"
         f"📌 Tarif: {plan}\n"
         f"💰 Summa: {price:,} so'm\n\n"
-        f"💳 Karta raqamlari:\n"
+        f"💳 Karta:\n"
         f"Visa: {VISA_CARD}\n"
         f"Humo: {HUMO_CARD}\n"
-        f"👤 Karta egasi: {CARD_OWNER}\n\n"
-        f"📸 To'lov qilgandan so'ng screenshot yuboring!"
+        f"👤 Egasi: {CARD_OWNER}\n\n"
+        f"📸 To'lov screenshotini yuboring!"
     )
 
 # FOTO
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    logger.info(f"📸 Screenshot keldi: {user.id}")
+    logger.info(f"📸 Screenshot: {user.id}")
     
     cursor.execute("SELECT plan, days, price FROM payments WHERE admin_id=? AND status='pending'", (user.id,))
     payment = cursor.fetchone()
@@ -99,15 +103,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_photo(
             chat_id=OWNER_ID,
             photo=update.message.photo[-1].file_id,
-            caption=f"💰 To'lov tekshiruvi\n"
-                   f"👤 Foydalanuvchi: {user.id}\n"
-                   f"📌 Tarif: {plan}\n"
-                   f"💰 Summa: {price:,} so'm",
+            caption=f"💰 To'lov\n👤 ID: {user.id}\n📌 {plan}\n💰 {price:,} so'm",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         await update.message.reply_text("✅ To'lov qabul qilindi! Admin tekshiryapti.")
     else:
-        await update.message.reply_text("❌ Sizda kutilayotgan to'lov yo'q")
+        await update.message.reply_text("❌ Kutilayotgan to'lov yo'q")
 
 # TASDIQLASH
 async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -127,9 +128,9 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await context.bot.send_message(
         chat_id=admin_id,
-        text=f"✅ Premium {days} kun aktiv qilindi!\n📅 Tugash sanasi: {expire}"
+        text=f"✅ Premium {days} kun aktiv!\n📅 Tugash: {expire}"
     )
-    await query.edit_message_caption("✅ To'lov tasdiqlandi!")
+    await query.edit_message_caption("✅ Tasdiqlandi!")
 
 # STATISTIKA
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -142,35 +143,51 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"📊 STATISTIKA\n\n"
-        f"👥 Faol foydalanuvchilar: {count}\n"
-        f"💰 Umumiy daromad: {total:,} so'm"
+        f"👥 Faol: {count}\n"
+        f"💰 Daromad: {total:,} so'm"
     )
 
 # ASOSIY FUNKSIYA
-def main():
-    logger.info("🤖 Bot ishga tushyapti...")
-    
+async def run_bot():
+    """Botni ishga tushirish"""
     try:
-        # Bot app ni yaratish
+        logger.info("🤖 Bot ishga tushyapti...")
+        
+        # Application yaratish
         app = Application.builder().token(TOKEN).build()
         
-        # Handlerlarni qo'shish
+        # Handlerlar
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("stats", stats))
         app.add_handler(CallbackQueryHandler(plan_handler, pattern="^(monthly|yearly)$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         app.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
         
-        logger.info(f"✅ Token tekshirildi: {TOKEN[:10]}...")
         logger.info("✅ Handlerlar qo'shildi")
         logger.info("🚀 Bot polling ishga tushdi!")
         
-        # Botni ishga tushirish
-        app.run_polling()
+        # Pollingni boshlash
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
         
+        # Bot ishlab turishi uchun
+        while True:
+            await asyncio.sleep(3600)  # 1 soat kutish
+            logger.info("⏰ Bot ishlayapti...")
+            
     except Exception as e:
-        logger.error(f"❌ Bot xatolik: {e}")
+        logger.error(f"❌ Xatolik: {e}")
         raise e
+
+def main():
+    """Asosiy funksiya"""
+    try:
+        asyncio.run(run_bot())
+    except KeyboardInterrupt:
+        logger.info("🛑 Bot to'xtatildi")
+    except Exception as e:
+        logger.error(f"❌ Asosiy xatolik: {e}")
 
 if __name__ == "__main__":
     main()
