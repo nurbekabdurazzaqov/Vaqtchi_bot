@@ -16,7 +16,7 @@ from telegram.ext import (
 )
 
 TOKEN = os.getenv("TOKEN")
-OWNER_ID = 5351101319  # <-- Sizning Telegram ID
+OWNER_ID = 5351101319
 
 # ================= NARXLAR =================
 MONTHLY_PRICE = 49000
