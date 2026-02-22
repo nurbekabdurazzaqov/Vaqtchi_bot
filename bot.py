@@ -41,6 +41,27 @@ cursor.execute("""CREATE TABLE IF NOT EXISTS payments (
 conn.commit()
 logger.info("✅ Database tayyor")
 
+# Application obyekti (global)
+application = None
+
+def get_application():
+    """Application obyektini yaratish yoki qaytarish"""
+    global application
+    if application is None:
+        # Application yaratish (pollingsiz)
+        application = Application.builder().token(TOKEN).build()
+        
+        # Handlerlarni qo'shish
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("stats", stats))
+        application.add_handler(CallbackQueryHandler(plan_handler, pattern="^(monthly|yearly)$"))
+        application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        application.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
+        
+        logger.info("✅ Handlerlar qo'shildi")
+    
+    return application
+
 # START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -145,26 +166,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👥 Faol: {count}\n"
         f"💰 Daromad: {total:,} so'm"
     )
-
-# Bot application obyekti (pollingsiz)
-application = None
-
-def get_application():
-    """Application obyektini yaratish yoki qaytarish"""
-    global application
-    if application is None:
-        application = Application.builder().token(TOKEN).build()
-        
-        # Handlerlarni qo'shish
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("stats", stats))
-        application.add_handler(CallbackQueryHandler(plan_handler, pattern="^(monthly|yearly)$"))
-        application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-        application.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
-        
-        logger.info("✅ Handlerlar qo'shildi")
-    
-    return application
 
 # Webhook orqali kelgan update ni qayta ishlash
 async def process_update(update_data):
