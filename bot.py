@@ -47,6 +47,7 @@ application = None
 def get_application():
     global application
     if application is None:
+        # Application yaratish (pollingsiz)
         application = Application.builder().token(TOKEN).build()
         
         # Handlerlarni qo'shish
