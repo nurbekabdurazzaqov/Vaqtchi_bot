@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Bot token
-TOKEN = "8593303902:AAGMhVPyns29h0X3BRtpF3h0nal1Qllw"
+TOKEN = "8593303902:AAGMhVPyns29hOX3BRtpEj3bQQeUOo1GUwg"
 
 # Webhook yo'li - Telegram POST so'rovlarini shu yerga yuboradi
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
