@@ -27,12 +27,13 @@ def health():
 
 @app.route(WEBHOOK_PATH, methods=['POST'])
 def webhook():
+    """Telegram webhook endpoint"""
     try:
-        update_data = request.get_json()
+        update_data = request.get_json(force=True)
         if update_data:
             logger.info(f"📩 Update keldi: {update_data.get('update_id')}")
             
-            # Yangi event loop yaratish
+            # Asinxron funktsiyani sinxron ishga tushirish
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(bot.process_update(update_data))
@@ -50,9 +51,14 @@ def set_webhook():
         webhook_url = f"https://vaqtchi-bot.onrender.com{WEBHOOK_PATH}"
         telegram_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook"
         
-        response = requests.post(telegram_url, json={"url": webhook_url})
+        response = requests.post(telegram_url, json={
+            "url": webhook_url,
+            "allowed_updates": ["message", "callback_query"],
+            "drop_pending_updates": True
+        })
         return jsonify(response.json())
     except Exception as e:
+        logger.error(f"❌ Webhook o'rnatishda xatolik: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/delete_webhook', methods=['GET'])
@@ -78,4 +84,4 @@ def webhook_info():
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 10000))
     logger.info(f"🚀 Flask server {port}-portda ishga tushyapti...")
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=False)
