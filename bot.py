@@ -2,19 +2,21 @@ import sqlite3
 import os
 import logging
 import asyncio
+import sys
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.error import InvalidToken
 
 # Loglarni sozlash
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# TOKENLAR
-TOKEN = os.environ.get("TELEGRAM_TOKEN")
-OWNER_ID = int(os.environ.get("OWNER_ID", "5351101319"))
+# TOKENLAR - MUHIM! To'g'ridan-to'g'ri yozamiz
+TOKEN = "8593303902:AAGMhVPyns29h0X3BRtpF3h0nal1Qllw"
+OWNER_ID = 5351101319
 
-logger.info(f"📌 Token: {TOKEN[:10] if TOKEN else 'TOPILMADI'}...")
+logger.info(f"📌 Token: {TOKEN[:10]}...")
 logger.info(f"📌 Owner ID: {OWNER_ID}")
 
 # KARTALAR
@@ -28,19 +30,22 @@ YEARLY_PRICE = 349000
 
 # DATABASE
 logger.info("📁 Database ulanyapti...")
-conn = sqlite3.connect("database.db", check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute("""CREATE TABLE IF NOT EXISTS payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    admin_id INTEGER,
-    plan TEXT,
-    days INTEGER,
-    price INTEGER,
-    expire_date TEXT,
-    status TEXT DEFAULT 'pending'
-)""")
-conn.commit()
-logger.info("✅ Database tayyor")
+try:
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("""CREATE TABLE IF NOT EXISTS payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_id INTEGER,
+        plan TEXT,
+        days INTEGER,
+        price INTEGER,
+        expire_date TEXT,
+        status TEXT DEFAULT 'pending'
+    )""")
+    conn.commit()
+    logger.info("✅ Database tayyor")
+except Exception as e:
+    logger.error(f"❌ Database xatolik: {e}")
 
 # START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -148,13 +153,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # ASOSIY FUNKSIYA
-async def run_bot():
+def main():
     """Botni ishga tushirish"""
     try:
         logger.info("🤖 Bot ishga tushyapti...")
         
         # Application yaratish
         app = Application.builder().token(TOKEN).build()
+        logger.info("✅ Application yaratildi")
         
         # Handlerlar
         app.add_handler(CommandHandler("start", start))
@@ -162,32 +168,20 @@ async def run_bot():
         app.add_handler(CallbackQueryHandler(plan_handler, pattern="^(monthly|yearly)$"))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         app.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
-        
         logger.info("✅ Handlerlar qo'shildi")
-        logger.info("🚀 Bot polling ishga tushdi!")
         
         # Pollingni boshlash
-        await app.initialize()
-        await app.start()
-        await app.updater.start_polling()
+        logger.info("🚀 Bot polling ishga tushmoqda...")
+        app.run_polling()
         
-        # Bot ishlab turishi uchun
-        while True:
-            await asyncio.sleep(3600)  # 1 soat kutish
-            logger.info("⏰ Bot ishlayapti...")
-            
+    except InvalidToken:
+        logger.error("❌ TOKEN XATO! Bot token noto'g'ri!")
+        logger.error(f"Token: {TOKEN}")
     except Exception as e:
-        logger.error(f"❌ Xatolik: {e}")
-        raise e
-
-def main():
-    """Asosiy funksiya"""
-    try:
-        asyncio.run(run_bot())
-    except KeyboardInterrupt:
-        logger.info("🛑 Bot to'xtatildi")
-    except Exception as e:
-        logger.error(f"❌ Asosiy xatolik: {e}")
+        logger.error(f"❌ Bot xatolik: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
 
 if __name__ == "__main__":
+    logger.info("🚀 Bot moduli ishga tushdi!")
     main()
