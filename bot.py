@@ -41,14 +41,12 @@ cursor.execute("""CREATE TABLE IF NOT EXISTS payments (
 conn.commit()
 logger.info("✅ Database tayyor")
 
-# Application obyekti (global)
+# Application obyekti
 application = None
 
 def get_application():
-    """Application obyektini yaratish yoki qaytarish"""
     global application
     if application is None:
-        # Application yaratish (pollingsiz)
         application = Application.builder().token(TOKEN).build()
         
         # Handlerlarni qo'shish
@@ -59,7 +57,6 @@ def get_application():
         application.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
         
         logger.info("✅ Handlerlar qo'shildi")
-    
     return application
 
 # START
@@ -169,12 +166,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Webhook orqali kelgan update ni qayta ishlash
 async def process_update(update_data):
-    """Kelgan update ni qayta ishlash"""
     try:
         app = get_application()
         update = Update.de_json(update_data, app.bot)
         await app.process_update(update)
         return True
     except Exception as e:
-        logger.error(f"❌ Update ni qayta ishlashda xatolik: {e}")
+        logger.error(f"❌ Xatolik: {e}")
         return False
