@@ -41,7 +41,7 @@ cursor.execute("""CREATE TABLE IF NOT EXISTS payments (
 conn.commit()
 logger.info("✅ Database tayyor")
 
-# HANDLERLAR
+# START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     logger.info(f"👤 /start: {user.id}")
@@ -58,6 +58,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+# TANLASH
 async def plan_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user = query.from_user
@@ -86,6 +87,7 @@ async def plan_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📸 To'lov screenshotini yuboring!"
     )
 
+# FOTO
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     logger.info(f"📸 Screenshot: {user.id}")
@@ -107,6 +109,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ Kutilayotgan to'lov yo'q")
 
+# TASDIQLASH
 async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -128,6 +131,7 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await query.edit_message_caption("✅ Tasdiqlandi!")
 
+# STATISTIKA
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
         return
@@ -142,10 +146,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 Daromad: {total:,} so'm"
     )
 
-# Bot application obyektini yaratish
+# Bot application obyekti (pollingsiz)
 application = None
 
-def create_application():
+def get_application():
+    """Application obyektini yaratish yoki qaytarish"""
     global application
     if application is None:
         application = Application.builder().token(TOKEN).build()
@@ -163,8 +168,9 @@ def create_application():
 
 # Webhook orqali kelgan update ni qayta ishlash
 async def process_update(update_data):
+    """Kelgan update ni qayta ishlash"""
     try:
-        app = create_application()
+        app = get_application()
         update = Update.de_json(update_data, app.bot)
         await app.process_update(update)
         return True
