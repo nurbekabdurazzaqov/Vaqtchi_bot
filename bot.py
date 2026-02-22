@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 # TOKENLAR
-TOKEN = "8593303902:AAGMhVPyns29h0X3BRtpF3h0nal1Qllw"
+TOKEN = "8593303902:AAGMhVPyns29hOX3BRtpEj3bQQeUOo1GUwg"
 OWNER_ID = 5351101319
 
 logger.info(f"📌 Token: {TOKEN[:10]}...")
