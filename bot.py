@@ -3,13 +3,13 @@ import os
 import logging
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # Loglarni sozlash
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# TOKENLAR
+# TOKENLAR - To'g'ridan-to'g'ri yozamiz
 TOKEN = "8593303902:AAGMhVPyns29h0X3BRtpF3h0nal1Qllw"
 OWNER_ID = 5351101319
 
@@ -42,7 +42,7 @@ conn.commit()
 logger.info("✅ Database tayyor")
 
 # START
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     logger.info(f"👤 /start: {user.id}")
     
@@ -50,7 +50,7 @@ def start(update: Update, context: CallbackContext):
         [InlineKeyboardButton("💎 Oylik Premium", callback_data="monthly")],
         [InlineKeyboardButton("👑 Yillik Premium", callback_data="yearly")]
     ]
-    update.message.reply_text(
+    await update.message.reply_text(
         f"💎 TARIFLAR\n\n"
         f"📅 Oylik: {MONTHLY_PRICE:,} so'm\n"
         f"👑 Yillik: {YEARLY_PRICE:,} so'm\n\n"
@@ -59,10 +59,10 @@ def start(update: Update, context: CallbackContext):
     )
 
 # TANLASH
-def plan_handler(update: Update, context: CallbackContext):
+async def plan_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user = query.from_user
-    query.answer()
+    await query.answer()
     
     logger.info(f"👤 Tarif: {user.id} - {query.data}")
     
@@ -76,7 +76,7 @@ def plan_handler(update: Update, context: CallbackContext):
                   (user.id, plan, days, price))
     conn.commit()
     
-    query.edit_message_text(
+    await query.edit_message_text(
         f"💳 TO'LOV MA'LUMOTLARI\n\n"
         f"📌 Tarif: {plan}\n"
         f"💰 Summa: {price:,} so'm\n\n"
@@ -88,7 +88,7 @@ def plan_handler(update: Update, context: CallbackContext):
     )
 
 # FOTO
-def handle_photo(update: Update, context: CallbackContext):
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     logger.info(f"📸 Screenshot: {user.id}")
     
@@ -99,23 +99,23 @@ def handle_photo(update: Update, context: CallbackContext):
         plan, days, price = payment
         keyboard = [[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{user.id}_{days}_{price}")]]
         
-        context.bot.send_photo(
+        await context.bot.send_photo(
             chat_id=OWNER_ID,
             photo=update.message.photo[-1].file_id,
             caption=f"💰 To'lov\n👤 ID: {user.id}\n📌 {plan}\n💰 {price:,} so'm",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        update.message.reply_text("✅ To'lov qabul qilindi! Admin tekshiryapti.")
+        await update.message.reply_text("✅ To'lov qabul qilindi! Admin tekshiryapti.")
     else:
-        update.message.reply_text("❌ Kutilayotgan to'lov yo'q")
+        await update.message.reply_text("❌ Kutilayotgan to'lov yo'q")
 
 # TASDIQLASH
-def approve(update: Update, context: CallbackContext):
+async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     if query.from_user.id != OWNER_ID:
-        query.edit_message_caption("❌ Siz admin emassiz!")
+        await query.edit_message_caption("❌ Siz admin emassiz!")
         return
     
     data = query.data.split("_")
@@ -125,14 +125,14 @@ def approve(update: Update, context: CallbackContext):
     cursor.execute("UPDATE payments SET status='approved', expire_date=? WHERE admin_id=?", (expire, admin_id))
     conn.commit()
     
-    context.bot.send_message(
+    await context.bot.send_message(
         chat_id=admin_id,
         text=f"✅ Premium {days} kun aktiv!\n📅 Tugash: {expire}"
     )
-    query.edit_message_caption("✅ Tasdiqlandi!")
+    await query.edit_message_caption("✅ Tasdiqlandi!")
 
 # STATISTIKA
-def stats(update: Update, context: CallbackContext):
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
         return
     
@@ -140,7 +140,7 @@ def stats(update: Update, context: CallbackContext):
     count, total = cursor.fetchone()
     total = total or 0
     
-    update.message.reply_text(
+    await update.message.reply_text(
         f"📊 STATISTIKA\n\n"
         f"👥 Faol: {count}\n"
         f"💰 Daromad: {total:,} so'm"
@@ -152,24 +152,21 @@ def main():
     try:
         logger.info("🤖 Bot ishga tushyapti...")
         
-        # Updater yaratish
-        updater = Updater(TOKEN, use_context=True)
-        dp = updater.dispatcher
-        logger.info("✅ Updater yaratildi")
+        # Application yaratish
+        app = Application.builder().token(TOKEN).build()
+        logger.info("✅ Application yaratildi")
         
         # Handlerlar
-        dp.add_handler(CommandHandler("start", start))
-        dp.add_handler(CommandHandler("stats", stats))
-        dp.add_handler(CallbackQueryHandler(plan_handler, pattern="^(monthly|yearly)$"))
-        dp.add_handler(MessageHandler(Filters.photo, handle_photo))
-        dp.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("stats", stats))
+        app.add_handler(CallbackQueryHandler(plan_handler, pattern="^(monthly|yearly)$"))
+        app.add_handler(MessageHandler(filters.PHOTO, handle_photo))  # filters.PHOTO (katta harf emas!)
+        app.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
         logger.info("✅ Handlerlar qo'shildi")
         
         # Pollingni boshlash
         logger.info("🚀 Bot polling ishga tushmoqda...")
-        updater.start_polling()
-        logger.info("✅ Bot ishga tushdi!")
-        updater.idle()
+        app.run_polling()
         
     except Exception as e:
         logger.error(f"❌ Bot xatolik: {e}")
