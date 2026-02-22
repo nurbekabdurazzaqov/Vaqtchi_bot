@@ -41,24 +41,24 @@ cursor.execute("""CREATE TABLE IF NOT EXISTS payments (
 conn.commit()
 logger.info("✅ Database tayyor")
 
-# Application obyekti
-application = None
+# Application obyekti (pollingsiz)
+_bot_app = None
 
-def get_application():
-    global application
-    if application is None:
-        # Application yaratish (pollingsiz)
-        application = Application.builder().token(TOKEN).build()
+def get_bot_app():
+    """Application obyektini yaratish"""
+    global _bot_app
+    if _bot_app is None:
+        _bot_app = Application.builder().token(TOKEN).build()
         
         # Handlerlarni qo'shish
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("stats", stats))
-        application.add_handler(CallbackQueryHandler(plan_handler, pattern="^(monthly|yearly)$"))
-        application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-        application.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
+        _bot_app.add_handler(CommandHandler("start", start))
+        _bot_app.add_handler(CommandHandler("stats", stats))
+        _bot_app.add_handler(CallbackQueryHandler(plan_handler, pattern="^(monthly|yearly)$"))
+        _bot_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        _bot_app.add_handler(CallbackQueryHandler(approve, pattern="^approve_"))
         
         logger.info("✅ Handlerlar qo'shildi")
-    return application
+    return _bot_app
 
 # START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -167,11 +167,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Webhook orqali kelgan update ni qayta ishlash
 async def process_update(update_data):
+    """Kelgan update ni qayta ishlash"""
     try:
-        app = get_application()
+        app = get_bot_app()
         update = Update.de_json(update_data, app.bot)
         await app.process_update(update)
         return True
     except Exception as e:
-        logger.error(f"❌ Xatolik: {e}")
+        logger.error(f"❌ Update ni qayta ishlashda xatolik: {e}")
         return False
